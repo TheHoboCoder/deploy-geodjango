@@ -56,6 +56,8 @@ chmod g+x $APPFOLDERPATH || error_exit "Error setting group execute flag"
 echo "copying project to dir"
 cp -R ../$APPNAME $APPFOLDERPATH/$APPNAME || error_exit "Error copying dir"
 chown -R $APPNAME:$GROUPNAME $APPFOLDERPATH/$APPNAME
+echo "remove git repository in $APPFOLDERPATH/$APPNAME"
+rm -R $APPFOLDERPATH/$APPNAME/.git
 
 # install python virtualenv in the APPFOLDER
 echo "Creating environment setup for django app..."
