@@ -7,9 +7,11 @@ check_root
 # Prerequisite standard packages. If any of these are missing,
 # script will attempt to install it. If installation fails, it will abort.
 # simple deploy with apache mod_wsgi
-LINUX_PREREQ=('build-essential' 'python3-dev' 'python3-pip' 'python3-venv' 'apache2' 'libapache2-mod-wsgi-py3' 'postgresql-14' 'libpq-dev' )
+LINUX_PREREQ=('build-essential' 'python3-dev' 'python3-pip' 'python3-venv' 'apache2' 'libapache2-mod-wsgi-py3' 'postgresql' 'libpq-dev' )
+POSTGRES_V=apt-cache search --names-only postgresql | grep -oP "^postgres-\K13|14" | head -n 1
+echo "postgres_v = $POSTGRES_V"
 # geo specific packages
-LINUX_PREREQ+=('postgresql-14-postgis-3' 'postgresql-server-dev-14' 'python3-psycopg2' 'binutils' 'libproj-dev' 'gdal-bin' 'libgdal-dev')
+LINUX_PREREQ+=("postgresql-$POSTGRES_V-postgis-3" "postgresql-server-dev-$POSTGRES_V" 'python3-psycopg2' 'binutils' 'libproj-dev' 'gdal-bin' 'libgdal-dev')
 
 # Test prerequisites
 echo "Checking if required packages are installed..."
