@@ -6,6 +6,7 @@ check_root
 # conventional values that we'll use throughout the script
 APPNAME=$1
 DOMAINNAME=$2
+SUBDOMEN=$3
 
 # check appname was supplied as argument
 if [ "$APPNAME" == "" ] || [ "$DOMAINNAME" == "" ]; then
@@ -21,4 +22,4 @@ echo "+++++++++++++++++++++++++++"
 echo "+++++++++++++++++++++++++++"
 echo "    INSTALLING PROJECT     "
 echo "+++++++++++++++++++++++++++"
-./deploy_django_project.sh $APPNAME $DOMAINNAME
+./deploy_django_project.sh $APPNAME $DOMAINNAME $SUBDOMEN
