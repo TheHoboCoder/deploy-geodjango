@@ -225,6 +225,8 @@ python3 manage.py makemigrations
 python3 manage.py migrate
 echo "creating superuser"
 python3 manage.py createsuperuser --noinput --username admin
+echo "load data dump"
+python3 manage.py loaddata dump.json
 echo "collecting static files"
 python3 manage.py collectstatic
 echo "PROJECT SETUP DONE!"

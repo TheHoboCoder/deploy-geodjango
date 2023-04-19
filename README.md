@@ -12,7 +12,7 @@ Designed mainly for personal use, so use it at your own risk.
 # Usage
 
 1. clone this repository
-2. clone your project. Your project rep and this rep must be in same dir. Also your project must contain requirements.txt file
+2. clone your project. Your project rep and this rep must be in same dir. Also your project must contain requirements.txt file & dump.json file.
 3. run deploy script as root, with first argument equal to your project name
 4. script will copy your project to /webapps/<project_name>_project folder and deploy everything.
 
