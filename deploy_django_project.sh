@@ -13,12 +13,17 @@ check_root
 # conventional values that we'll use throughout the script
 APPNAME=$1
 DOMAINNAME=$2
+SUBDOMEN=$3
 
 # check appname was supplied as argument
 if [ "$APPNAME" == "" ] || [ "$DOMAINNAME" == "" ]; then
 	echo "Usage:"
 	echo "  $ create_django_project_run_env <project> <domain>"
 	exit 1
+fi
+
+if [ "$SUBDOMEN" == "" ]; then
+SUBDOMEN="/"
 fi
 
 GROUPNAME=webapps
@@ -120,8 +125,6 @@ source ./django_venv/bin/activate
 pip install --upgrade pip
 # install prerequisite python packages for a django app using pip
 echo "installing app requirments"
-echo "Installing GDAL first"
-pip install GDAL==$(gdal-config --version)
 echo "Installing psycopg2"
 pip install psycopg2
 echo "Installing other req"
@@ -156,7 +159,7 @@ DEBUG = False
 
 # Note that this is a wildcard specification. So it matches
 # smallpearl.com as well as www.smallpearl.com
-ALLOWED_HOSTS = ['.$DOMAINNAME', '$(hostname -I)'.strip()]
+ALLOWED_HOSTS = ['.$DOMAINNAME']
 #TODO:
 #CSRF_TRUSTED_ORIGINS = ALLOWED_HOSTS
 
@@ -256,7 +259,7 @@ cat > /etc/apache2/sites-available/000-default.conf << EOF
 
     WSGIDaemonProcess $DOMAINNAME python-path=$APPFOLDERPATH/$APPNAME python-home=$APPFOLDERPATH/django_venv
     WSGIProcessGroup $DOMAINNAME
-    WSGIScriptAlias / $APPFOLDERPATH/$APPNAME/$APPNAME/prod_wsgi.py
+    WSGIScriptAlias $SUBDOMEN $APPFOLDERPATH/$APPNAME/$APPNAME/prod_wsgi.py
 
 </VirtualHost>
 EOF

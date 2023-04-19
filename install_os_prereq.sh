@@ -11,7 +11,7 @@ LINUX_PREREQ=('build-essential' 'python3-dev' 'python3-pip' 'python3-venv' 'apac
 POSTGRES_V=`apt-cache search --names-only postgresql | grep -oP "^postgresql-\K13|14" | head -n 1`
 echo "postgres_v = $POSTGRES_V"
 # geo specific packages
-LINUX_PREREQ+=("postgresql-$POSTGRES_V-postgis-3" "postgresql-server-dev-$POSTGRES_V" 'python3-psycopg2' 'binutils' 'libproj-dev' 'gdal-bin' 'libgdal-dev')
+LINUX_PREREQ+=("postgresql-$POSTGRES_V-postgis-3" "postgresql-server-dev-$POSTGRES_V" 'python3-psycopg2' 'binutils' 'libproj-dev' 'gdal-bin')
 
 # Test prerequisites
 echo "Checking if required packages are installed..."
