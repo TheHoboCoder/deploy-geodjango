@@ -2,7 +2,8 @@
 # 
 # simple deploy with mod_wsgi
 # Usage:
-#	$ deploy_django_project.sh <appname> <domain> <python-version>
+#	$ deploy_django_project.sh <appname> <domain> <subdomen>
+#   NOTE: domen without protocol
 # assuming there's appname dir with django project next to this dir
 # it will be copied to /webapps/appname_project/
 
@@ -18,9 +19,11 @@ SUBDOMEN=$3
 # check appname was supplied as argument
 if [ "$APPNAME" == "" ] || [ "$DOMAINNAME" == "" ]; then
 	echo "Usage:"
-	echo "  $ create_django_project_run_env <project> <domain>"
+	echo "  $ create_django_project_run_env <project> <domain> [subdomen]"
 	exit 1
 fi
+
+ROOTPATH=$SUBDOMEN
 
 if [ "$SUBDOMEN" == "" ]; then
 SUBDOMEN="/"
@@ -66,13 +69,10 @@ rm -R $APPFOLDERPATH/$APPNAME/.git
 
 # install python virtualenv in the APPFOLDER
 echo "Creating environment setup for django app..."
-# python3 -m venv $APPFOLDERPATH/django_venv 
-# chown -R $APPNAME:$GROUPNAME $APPFOLDERPATH/django_venv
 su -l $APPNAME << EOF
 pwd
 echo "Setting up python virtualenv..."
 /usr/bin/python3 -m venv $APPFOLDERPATH/django_venv || error_exit "Error installing Python 3 virtual environment to app folder"
-
 EOF
 
 # ###################################################################
@@ -112,6 +112,53 @@ su postgres -c "psql $APPNAME -c \"CREATE EXTENSION postGIS\""
 
 
 # ###################################################################
+# Create the script that will init the virtual environment. T
+# ###################################################################
+echo "Creating virtual environment setup script..."
+cat > /tmp/prepare_env.sh << EOF
+DJANGODIR=$APPFOLDERPATH/$APPNAME          # Django project directory
+
+export DJANGO_SETTINGS_MODULE=$APPNAME.settings.production # settings file for the app
+export SECRET_KEY=`cat $APPFOLDERPATH/.django_secret_key`
+export DB_PASSWORD=`cat $APPFOLDERPATH/.django_db_password`
+export DJANGO_SUPERUSER_PASSWORD=changepassword
+export DJANGO_SUPERUSER_EMAIL=example@examplemail.com
+
+source ./django_venv/bin/activate
+EOF
+mv /tmp/prepare_env.sh $APPFOLDERPATH
+chown $APPNAME:$GROUPNAME $APPFOLDERPATH/prepare_env.sh
+chmod u+x $APPFOLDERPATH/prepare_env.sh
+
+# ###################################################################
+# Create the script that will install django req and run migrations
+# ###################################################################
+cat > /tmp/migrate.sh << EOF
+#!/bin/bash
+source ./prepare_env.sh
+cd geoportal
+# upgrade pip
+pip install --upgrade pip
+echo "installing app requirments"
+echo "Installing psycopg2"
+pip install psycopg2
+echo "Installing other req"
+pip install -r requirements.txt
+echo "Verify installation..."
+django-admin --version
+python3 manage.py makemigrations 
+python3 manage.py migrate
+python3 manage.py collectstatic --no-input
+EOF
+
+mv /tmp/migrate.sh $APPFOLDERPATH
+chown $APPNAME:$GROUPNAME $APPFOLDERPATH/migrate.sh
+chmod u+x $APPFOLDERPATH/migrate.sh
+
+chown $APPNAME:$GROUPNAME $APPFOLDERPATH/migrate.sh
+chmod u+x $APPFOLDERPATH/migrate.sh
+
+# ###################################################################
 # In the new app specific virtual environment:
 # 	1. Upgrade pip
 #	2. Install app requirments
@@ -119,20 +166,9 @@ su postgres -c "psql $APPNAME -c \"CREATE EXTENSION postGIS\""
 #		static -- Django static files (to be collected here)
 #		media  -- Django media files
 # ###################################################################
+
 su -l $APPNAME << EOF
-source ./django_venv/bin/activate
-# upgrade pip
-pip install --upgrade pip
-# install prerequisite python packages for a django app using pip
-echo "installing app requirments"
-echo "Installing psycopg2"
-pip install psycopg2
-echo "Installing other req"
-pip install -r $APPNAME/requirements.txt
-# create the default folders where we store django app's resources
-echo "Verify installation..."
-django-admin --version
-echo "Creating static file folders..."
+echo "Creating django static file folders..."
 mkdir static media
 # Change Django's default settings.py to use app/settings/{base.py|dev.py|production.py}
 mv $APPNAME/$APPNAME/settings.py $APPNAME/$APPNAME/base.py
@@ -141,11 +177,14 @@ mv $APPNAME/$APPNAME/base.py $APPNAME/$APPNAME/settings
 EOF
 
 echo "creating dev settings"
+# save host ip, echo to remove whitespaces
+IPHOST=$(echo $(hostname -I))
 cat > $APPFOLDERPATH/$APPNAME/$APPNAME/settings/production.py << EOF
 from .base import *
 
 MEDIA_ROOT = "$APPFOLDERPATH/media/"
 STATIC_ROOT = "$APPFOLDERPATH/static/"
+STATIC_URL="static/"
 
 def get_env_variable(var):
     '''Return the environment variable value or raise error'''
@@ -157,16 +196,17 @@ def get_env_variable(var):
 
 DEBUG = False
 
-# Note that this is a wildcard specification. So it matches
-# smallpearl.com as well as www.smallpearl.com
-ALLOWED_HOSTS = ['.$DOMAINNAME']
-#TODO:
-#CSRF_TRUSTED_ORIGINS = ALLOWED_HOSTS
-
-# CSRF middleware token & session cookie will only be transmitted over HTTPS
-# TODO:
+ALLOWED_HOSTS = ['$DOMAINNAME', '$IPHOST']
+CORS_ORIGIN_ALLOW_ALL = False
+DJANGO_VITE_DEV_MODE = False
+CSRF_TRUSTED_ORIGINS = ['https://$DOMAINNAME', 'http://$DOMAINNAME']
+CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
+# uncomment to support https
 # CSRF_COOKIE_SECURE = True
 # SESSION_COOKIE_SECURE = True
+# USE_X_FORWARDED_HOST = True 
+# USE_X_FORWARDED_PORT = True
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Get secret hash key from environment variable (set by ./prepre_env.sh)
 SECRET_KEY = get_env_variable('SECRET_KEY')
@@ -187,24 +227,6 @@ EOF
 chown $APPNAME:$GROUPNAME $APPFOLDERPATH/$APPNAME/$APPNAME/settings/production.py
 
 
-# ###################################################################
-# Create the script that will init the virtual environment. T
-# ###################################################################
-echo "Creating virtual environment setup script..."
-cat > /tmp/prepare_env.sh << EOF
-DJANGODIR=$APPFOLDERPATH/$APPNAME          # Django project directory
-
-export DJANGO_SETTINGS_MODULE=$APPNAME.settings.production # settings file for the app
-export SECRET_KEY=`cat $APPFOLDERPATH/.django_secret_key`
-export DB_PASSWORD=`cat $APPFOLDERPATH/.django_db_password`
-export DJANGO_SUPERUSER_PASSWORD=changepassword
-export DJANGO_SUPERUSER_EMAIL=example@examplemail.com
-
-EOF
-mv /tmp/prepare_env.sh $APPFOLDERPATH
-chown $APPNAME:$GROUPNAME $APPFOLDERPATH/prepare_env.sh
-chmod u+x $APPFOLDERPATH/prepare_env.sh
-
 echo "Setting virtual environment for wsgi script..."
 cat > $APPFOLDERPATH/$APPNAME/$APPNAME/prod_wsgi.py << EOF
 import os
@@ -220,18 +242,13 @@ EOF
 
 echo "final project setup"
 su -l $APPNAME << EOF
+./migrate.sh
 source ./prepare_env.sh
-source ./django_venv/bin/activate
 cd $APPNAME
-echo "migrating..."
-python3 manage.py makemigrations 
-python3 manage.py migrate
 echo "creating superuser"
 python3 manage.py createsuperuser --noinput --username admin
 echo "load data dump"
 python3 manage.py loaddata dump.json
-echo "collecting static files"
-python3 manage.py collectstatic
 echo "PROJECT SETUP DONE!"
 EOF
 
@@ -241,12 +258,12 @@ echo "creating apache2 config"
 cat > /etc/apache2/sites-available/000-default.conf << EOF
 <VirtualHost *:80>
 
-    Alias /static $APPFOLDERPATH/static
+    Alias $ROOTPATH/static $APPFOLDERPATH/static
     <Directory $APPFOLDERPATH/static>
         Require all granted
     </Directory>
 
-    Alias /media $APPFOLDERPATH/media
+    Alias $ROOTPATH/media $APPFOLDERPATH/media
     <Directory $APPFOLDERPATH/media>
         Require all granted
     </Directory>
@@ -268,7 +285,6 @@ echo "set media group to www-data"
 chown -R $APPNAME:www-data $APPFOLDERPATH/media
 chmod -R g+w $APPFOLDERPATH/media
 
-echo "restarting apache2"
-systemctl restart apache2.service
+
 
 echo "DONE!"
